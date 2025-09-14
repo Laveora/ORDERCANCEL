@@ -1,0 +1,257 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Orders</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: "Poppins", sans-serif;
+      margin: 0;
+      background: #f5f7fa;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    .header {
+      background: linear-gradient(to right, #6a11cb, #2575fc);
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 20px;
+    }
+    .header h1 {
+      font-size: 18px;
+      margin: 0;
+      font-weight: 600;
+    }
+    .header .back-btn {
+      background: white;
+      color: #2575fc;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 14px;
+    }
+    .header .back-btn:hover { background: #f1f1f1; }
+    .container {
+      flex: 1;
+      max-width: 1100px;
+      margin: 30px auto;
+      padding: 0 20px;
+    }
+    .orders-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .order-card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+      padding: 20px;
+      transition: 0.3s;
+    }
+    .order-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+    }
+    .order-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .order-id {
+      font-weight: 600;
+      font-size: 15px;
+      color: #444;
+    }
+    .status {
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      text-transform: capitalize;
+    }
+    .status.completed { background: #e6f9ec; color: #1b9e3d; }
+    .status.shipping { background: #e8f0ff; color: #2575fc; }
+    .status.pending { background: #fff3e0; color: #f57c00; }
+    .status.cancelled { background: #ffeaea; color: #d32f2f; }
+    .order-body p { margin: 6px 0; font-size: 14px; }
+    .order-price { font-weight: 600; color: #000; }
+    .invoice-link { text-align: center; margin-top: 15px; }
+    .invoice-link a {
+      display: inline-block;
+      background: #2575fc;
+      color: white;
+      text-decoration: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      transition: 0.3s;
+    }
+    .invoice-link a.cancel-btn { background: #d32f2f; }
+    .invoice-link a.cancel-btn:hover { background: #a82020; }
+    .no-orders { text-align: center; margin-top: 40px; font-size: 16px; color: #777; }
+    .footer {
+      text-align: center;
+      padding: 15px;
+      background: #f1f1f1;
+      font-size: 14px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>My Orders</h1>
+    <button id="backBtn" class="back-btn">Back</button>
+  </div>
+
+  <div class="container">
+    <div id="ordersContainer"><p>Loading your orders...</p></div>
+  </div>
+
+  <div class="footer">© 2025 Laveora Essence. All rights reserved.</div>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+
+  <script>
+    // ✅ Firebase Config
+    const firebaseConfig = {
+      apiKey:"AIzaSyBQM7hfXhGolPCWnJRAsAd_eHkyTFsXCmE",
+      authDomain:"laveora-essence.firebaseapp.com",
+      projectId:"laveora-essence",
+      storageBucket:"laveora-essence.firebasestorage.app",
+      messagingSenderId:"361641560677",
+      appId:"1:361641560677:web:6c44486754bb2ad6eb148c",
+      measurementId:"G-6NGV6Z8S9K"
+    };
+    firebase.initializeApp(firebaseConfig);
+
+    // ✅ Google Sheet (Orders CSV)
+    const sheetUrl = "https://docs.google.com/spreadsheets/d/19JxGW84-JNae6iZj9bQaw-oBsmlz9q9TlIJgqNKe57I/gviz/tq?tqx=out:csv";
+    // ✅ Apps Script API (Cancel Order)
+    const scriptUrl = "https://script.google.com/macros/s/AKfycbz5oyC0QKsmgZ27IWpuNSGYNcdT0eq2K-XufsU-45u4rSBF13vnGsKGeuMFOlipktwR/exec";
+
+    // ✅ Cancel Order Function
+    function cancelOrder(orderId) {
+  console.log("🟡 Cancel requested for:", orderId);
+
+  if (!confirm("Are you sure you want to cancel this order?")) return;
+
+  const cancelBtn = document.querySelector(`a.cancel-btn[onclick*="${orderId}"]`);
+  if (cancelBtn) {
+    cancelBtn.innerText = "Cancelling...";
+    cancelBtn.style.opacity = "0.6";
+    cancelBtn.style.pointerEvents = "none";
+  }
+
+  fetch("https://script.google.com/macros/s/AKfycbz5oyC0QKsmgZ27IWpuNSGYNcdT0eq2K-XufsU-45u4rSBF13vnGsKGeuMFOlipktwR/exec", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ orderId: orderId, action: "Cancelled" })
+  })
+    .then(res => res.json())
+    .then(data => {
+      console.log("Cancel Response:", data);
+      if (data.status === "success") {
+        alert("Order cancelled successfully.");
+        location.reload();
+      } else {
+        alert("Error: " + (data.message || "Unknown error"));
+        if (cancelBtn) {
+          cancelBtn.innerText = "Cancel Order";
+          cancelBtn.style.opacity = "1";
+          cancelBtn.style.pointerEvents = "auto";
+        }
+      }
+    })
+    .catch(err => {
+      alert("Network error: " + err.message);
+      if (cancelBtn) {
+        cancelBtn.innerText = "Cancel Order";
+        cancelBtn.style.opacity = "1";
+        cancelBtn.style.pointerEvents = "auto";
+      }
+    });
+}
+
+    // ✅ Load Orders for Logged In User
+    firebase.auth().onAuthStateChanged(function(user) {
+      const backBtn = document.getElementById("backBtn");
+
+      if (user) {
+        backBtn.onclick = () => window.location.href = "https://user.laveoraessence.online/dashboard";
+        let userEmail = user.email.trim().toLowerCase();
+
+        Papa.parse(sheetUrl, {
+          download: true, header: true,
+          complete: function(results) {
+            const rows = results.data;
+            const userOrders = rows.filter(row => (row["User Email ID"] || "").trim().toLowerCase() === userEmail);
+
+            console.log("📦 Orders fetched for:", userEmail, userOrders);
+
+            if (userOrders.length > 0) {
+              let cards = '<div class="orders-grid">';
+              userOrders.forEach(order => {
+                let statusClass = "pending";
+                const status = (order["Status"] || "").toLowerCase();
+                if (status.includes("complete")) statusClass = "completed";
+                else if (status.includes("ship")) statusClass = "shipping";
+                else if (status.includes("cancel")) statusClass = "cancelled";
+
+                const sheetOrderId = order["OrderId"] || "N/A";
+
+                let actionButtons = "";
+                if (status.includes("complete") && order["Invoice"]) {
+                  actionButtons = `<div class="invoice-link"><a href="${order["Invoice"]}" target="_blank">Download Invoice</a></div>`;
+                }
+                if (status.includes("pending") || status.includes("process")) {
+                  actionButtons = `<div class="invoice-link"><a href="javascript:void(0)" onclick="cancelOrder('${sheetOrderId}')" class="cancel-btn">Cancel Order</a></div>`;
+                }
+
+                cards += `
+                  <div class="order-card">
+                    <div>
+                      <div class="order-header">
+                        <span class="order-id">Order ID: ${sheetOrderId}</span>
+                        <span class="status ${statusClass}">${order["Status"] || ""}</span>
+                      </div>
+                      <div class="order-body">
+                        <p><strong>Product:</strong> ${order["Product Name"] || ""}</p>
+                        <p><strong>Quantity:</strong> ${order["Product Quantity"] || ""}</p>
+                        <p><strong>Date:</strong> ${order["Timestamp"] || ""}</p>
+                        <p><strong>Address:</strong> ${order["Delivery Address"] || ""}</p>
+                        <p class="order-price">Price: ₹${order["Price"] || ""}</p>
+                      </div>
+                    </div>
+                    ${actionButtons}
+                  </div>`;
+              });
+              cards += "</div>";
+              document.getElementById("ordersContainer").innerHTML = cards;
+            } else {
+              document.getElementById("ordersContainer").innerHTML = `<p class="no-orders">No orders found for ${userEmail}</p>`;
+            }
+          }
+        });
+
+      } else {
+        backBtn.onclick = () => window.location.href = "https://user.laveoraessence.online";
+        document.getElementById("ordersContainer").innerHTML = "<p class='no-orders'>Please log in to view your orders.</p>";
+      }
+    });
+  </script>
+</body>
+</html>
